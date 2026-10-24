@@ -1,174 +1,150 @@
 import React, { useState } from 'react';
+import '../styles/TaskForm.css';
 
-export default function TaskForm() {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('medium');
-  const [dueDate, setDueDate] = useState('');
+/**
+ * TaskForm component supporting both creation and editing modes.
+ *
+ * @param {Object} props
+ * @param {Object} [props.initialTask] - Existing task data for editing
+ * @param {(data: Object) => void} [props.onSave] - Callback for in-dashboard modal editing
+ * @param {() => void} [props.onCancel] - Callback to close/cancel
+ */
+export default function TaskForm({ initialTask, onSave, onCancel }) {
+  const [title, setTitle] = useState(initialTask?.title || '');
+  const [description, setDescription] = useState(initialTask?.description || '');
+  const [priority, setPriority] = useState(initialTask?.priority || 'medium');
+  const [dueDate, setDueDate] = useState(initialTask?.dueDate || '');
   const [submitting, setSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState('');
+
+  const isEditing = Boolean(initialTask);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+
+    if (!title.trim()) {
+      setValidationError('Please provide a task title.');
+      return;
+    }
 
     setSubmitting(true);
-    try {
-      if (window.electronAPI?.createTask) {
-        await window.electronAPI.createTask({
-          title: title.trim(),
-          description: description.trim(),
-          priority,
-          dueDate: dueDate || null,
-        });
+    setValidationError('');
 
-        // Close window if opened standalone
+    const taskPayload = {
+      title: title.trim(),
+      description: description.trim(),
+      priority,
+      dueDate: dueDate || null,
+    };
+
+    try {
+      if (onSave) {
+        // Modal mode within Dashboard
+        onSave(taskPayload);
+      } else if (window.electronAPI?.createTask) {
+        // Standalone native Electron window mode
+        await window.electronAPI.createTask(taskPayload);
         if (window.electronAPI?.closeWindow) {
           window.electronAPI.closeWindow();
         }
       }
     } catch (err) {
-      console.error('Failed to create task:', err);
+      console.error('Failed to save task:', err);
+      setValidationError('Failed to save task. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleCancel = () => {
-    if (window.electronAPI?.closeWindow) {
+  const handleCancelClick = () => {
+    if (onCancel) {
+      onCancel();
+    } else if (window.electronAPI?.closeWindow) {
       window.electronAPI.closeWindow();
     }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '460px', margin: '0 auto' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '6px' }}>Add New Task</h2>
-      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-        Create a task to track in your dashboard.
+    <div className="task-form-container">
+      <h2 className="task-form-title">{isEditing ? 'Edit Task' : 'Add New Task'}</h2>
+      <p className="task-form-subtitle">
+        {isEditing ? 'Update the details for this task.' : 'Fill in the information below to add a new task.'}
       </p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
-            Task Title *
+      <form className="task-form" onSubmit={handleSubmit}>
+        {/* Title Field */}
+        <div className="form-group">
+          <label htmlFor="task-title-input" className="form-label">
+            Task Title <span className="form-label-required">*</span>
           </label>
           <input
+            id="task-title-input"
             type="text"
-            required
-            placeholder="e.g. Finish semester project report"
+            className="form-input"
+            placeholder="e.g., Complete system architecture review"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              outline: 'none',
-              fontSize: '14px',
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (validationError) setValidationError('');
             }}
+            autoFocus
           />
+          {validationError && <div className="form-error">{validationError}</div>}
         </div>
 
-        <div>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+        {/* Description Field */}
+        <div className="form-group">
+          <label htmlFor="task-desc-input" className="form-label">
             Description
           </label>
           <textarea
-            rows="3"
-            placeholder="Add relevant details or requirements..."
+            id="task-desc-input"
+            className="form-textarea"
+            placeholder="Add relevant notes, steps, or acceptance criteria..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              outline: 'none',
-              fontSize: '14px',
-              resize: 'vertical',
-            }}
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+        {/* Priority & Due Date Row */}
+        <div className="form-row-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label htmlFor="task-priority-input" className="form-label">
               Priority
             </label>
             <select
+              id="task-priority-input"
+              className="form-select"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                outline: 'none',
-                fontSize: '14px',
-              }}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+              <option value="low">🟢 Low</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="high">🔴 High</option>
             </select>
           </div>
 
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label htmlFor="task-due-date-input" className="form-label">
               Due Date
             </label>
             <input
+              id="task-due-date-input"
               type="date"
+              className="form-input"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                outline: 'none',
-                fontSize: '14px',
-              }}
             />
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-          <button
-            type="button"
-            onClick={handleCancel}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: '500',
-            }}
-          >
+        {/* Action Buttons */}
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={handleCancelClick}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              padding: '8px 18px',
-              backgroundColor: 'var(--accent-primary)',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              color: '#fff',
-              cursor: submitting ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: '600',
-              opacity: submitting ? 0.7 : 1,
-            }}
-          >
-            {submitting ? 'Saving...' : 'Create Task'}
+          <button type="submit" className="btn-primary" disabled={submitting}>
+            {submitting ? 'Saving...' : isEditing ? 'Update Task' : 'Create Task'}
           </button>
         </div>
       </form>

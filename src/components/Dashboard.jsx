@@ -1,101 +1,163 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import Sidebar from './Sidebar.jsx';
+import Header from './Header.jsx';
+import SummaryCards from './SummaryCards.jsx';
+import FilterBar from './FilterBar.jsx';
+import TaskList from './TaskList.jsx';
+import TaskForm from './TaskForm.jsx';
+import { initialMockTasks } from '../data/mockTasks.js';
+import { filterTasks, calculateStats } from '../utils/filterUtils.js';
+import '../styles/Dashboard.css';
 
+/**
+ * Top-level Dashboard controller managing UI layout, mock state, and filter controls.
+ */
 export default function Dashboard() {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState(initialMockTasks);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [editingTask, setEditingTask] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function loadTasks() {
-      try {
-        if (window.electronAPI?.getAllTasks) {
-          const list = await window.electronAPI.getAllTasks();
-          setTasks(list);
+  // Derive stats across all tasks
+  const stats = calculateStats(tasks);
+
+  // Apply active search & filters
+  const visibleTasks = filterTasks(tasks, {
+    statusFilter,
+    searchQuery,
+    priorityFilter,
+  });
+
+  const hasActiveFilters = searchQuery !== '' || (priorityFilter !== '' && priorityFilter !== 'all');
+
+  // Task actions (Frontend Mock Handlers)
+  const handleToggleComplete = (id) => {
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id === id) {
+          const nextCompleted = !task.completed;
+          return {
+            ...task,
+            completed: nextCompleted,
+            status: nextCompleted ? 'completed' : 'todo',
+            updatedAt: new Date().toISOString(),
+          };
         }
-      } catch (err) {
-        console.error('Failed to load tasks:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
+        return task;
+      })
+    );
+  };
 
-    loadTasks();
-
-    if (window.electronAPI?.onTaskChanged) {
-      const unsubscribe = window.electronAPI.onTaskChanged(() => {
-        loadTasks();
-      });
-      return () => unsubscribe();
-    }
-  }, []);
+  const handleDeleteTask = (id) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  };
 
   const handleOpenAddTask = () => {
+    // If running inside Electron, trigger the standalone native window
     if (window.electronAPI?.openAddTaskWindow) {
       window.electronAPI.openAddTaskWindow();
+    } else {
+      // Browser fallback: create a demo task for immediate visual testing
+      const newTask = {
+        id: `task-${Date.now()}`,
+        title: `Task #${tasks.length + 1} (Test)`,
+        description: 'Created from Add Task button for demonstration.',
+        priority: 'medium',
+        status: 'todo',
+        completed: false,
+        dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setTasks((prev) => [newTask, ...prev]);
     }
   };
 
-  return (
-    <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
-      {/* Header */}
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '28px',
-          borderBottom: '1px solid var(--border-color)',
-          paddingBottom: '16px',
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px' }}>
-            TaskFlow Pro
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-            Desktop Productivity & Task Management
-          </p>
-        </div>
-        <button
-          onClick={handleOpenAddTask}
-          style={{
-            backgroundColor: 'var(--accent-primary)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            padding: '10px 18px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
-            transition: 'background 0.2s ease',
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--accent-primary-hover)')}
-          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'var(--accent-primary)')}
-        >
-          + Add New Task
-        </button>
-      </header>
+  const handleSaveEdit = (updatedData) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === editingTask.id ? { ...t, ...updatedData, updatedAt: new Date().toISOString() } : t))
+    );
+    setEditingTask(null);
+  };
 
-      {/* Main Container */}
-      <main>
-        <div
-          style={{
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '40px 20px',
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: '36px', marginBottom: '12px' }}>📋</div>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
-            {loading ? 'Loading tasks...' : tasks.length === 0 ? 'No tasks yet' : `${tasks.length} Task(s)`}
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '420px', margin: '0 auto' }}>
-            Use the "Add New Task" button above to launch the standalone task creation window.
-          </p>
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setPriorityFilter('all');
+  };
+
+  // Header Title mapping
+  const titleMap = {
+    all: 'All Tasks',
+    active: 'Active Tasks',
+    completed: 'Completed Tasks',
+  };
+
+  return (
+    <div className="dashboard-layout">
+      {/* 1. Left Sidebar Navigation */}
+      <Sidebar
+        currentFilter={statusFilter}
+        onSelectFilter={setStatusFilter}
+        stats={stats}
+      />
+
+      {/* 2. Main Content View */}
+      <main className="dashboard-main">
+        <div className="dashboard-content">
+          {/* Header */}
+          <Header
+            title={titleMap[statusFilter]}
+            subtitle={`Showing ${visibleTasks.length} of ${tasks.length} total tasks`}
+            onAddTask={handleOpenAddTask}
+          />
+
+          {/* Metric Cards & Progress Bar */}
+          <SummaryCards
+            total={stats.total}
+            active={stats.active}
+            completed={stats.completed}
+            percentComplete={stats.percentComplete}
+          />
+
+          {/* Search Field & Priority Dropdown */}
+          <FilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            priorityFilter={priorityFilter}
+            onPriorityChange={setPriorityFilter}
+            onResetFilters={handleResetFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+
+          {/* Task Collection / Empty / Loading States */}
+          <TaskList
+            tasks={visibleTasks}
+            loading={loading}
+            error={error}
+            onRetry={() => setError(null)}
+            onAddTask={handleOpenAddTask}
+            onToggleComplete={handleToggleComplete}
+            onEdit={(task) => setEditingTask(task)}
+            onDelete={handleDeleteTask}
+          />
         </div>
       </main>
+
+      {/* Optional Edit Modal for rapid in-dashboard editing */}
+      {editingTask && (
+        <div className="modal-overlay" onClick={() => setEditingTask(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <TaskForm
+              initialTask={editingTask}
+              onSave={handleSaveEdit}
+              onCancel={() => setEditingTask(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
