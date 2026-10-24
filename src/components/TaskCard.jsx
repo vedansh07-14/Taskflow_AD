@@ -3,13 +3,13 @@ import { formatDueDate, isOverdue } from '../utils/dateUtils.js';
 import '../styles/TaskCard.css';
 
 /**
- * TaskCard presentational component displaying a single task item.
+ * TaskCard presentational component displaying an individual task with status, badges, and action triggers.
  *
  * @param {Object} props
  * @param {Object} props.task
  * @param {(id: string) => void} props.onToggleComplete
  * @param {(task: Object) => void} props.onEdit
- * @param {(id: string) => void} props.onDelete
+ * @param {(task: Object) => void} props.onDelete
  */
 export default function TaskCard({ task, onToggleComplete, onEdit, onDelete }) {
   const overdue = isOverdue(task.dueDate, task.completed);
@@ -17,7 +17,7 @@ export default function TaskCard({ task, onToggleComplete, onEdit, onDelete }) {
 
   return (
     <article className={`task-card ${task.completed ? 'is-completed' : ''}`}>
-      {/* Checkbox */}
+      {/* Complete Checkbox */}
       <div className="task-checkbox-wrapper">
         <input
           type="checkbox"
@@ -48,7 +48,7 @@ export default function TaskCard({ task, onToggleComplete, onEdit, onDelete }) {
             <button
               type="button"
               className="task-action-btn btn-delete"
-              onClick={() => onDelete(task.id)}
+              onClick={() => onDelete(task)}
               title="Delete task"
             >
               🗑️ <span style={{ fontSize: '12px' }}>Delete</span>

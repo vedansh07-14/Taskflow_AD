@@ -1,37 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/TaskForm.css';
 
 /**
- * TaskForm component supporting both creation and editing modes.
+ * Controlled TaskForm component supporting both creation and non-destructive editing.
  *
  * @param {Object} props
- * @param {Object} [props.initialTask] - Existing task data for editing
- * @param {(data: Object) => void} [props.onSave] - Callback for in-dashboard modal editing
- * @param {() => void} [props.onCancel] - Callback to close/cancel
+ * @param {Object} [props.initialTask] - Existing task data if in edit mode
+ * @param {(taskData: Object) => void} props.onSave - Callback when task is saved/created
+ * @param {() => void} props.onCancel - Callback to close/cancel the form
  */
 export default function TaskForm({ initialTask, onSave, onCancel }) {
+  const isEditing = Boolean(initialTask);
+
+  // Controlled component state initialized from props
   const [title, setTitle] = useState(initialTask?.title || '');
   const [description, setDescription] = useState(initialTask?.description || '');
   const [priority, setPriority] = useState(initialTask?.priority || 'medium');
   const [dueDate, setDueDate] = useState(initialTask?.dueDate || '');
-  const [submitting, setSubmitting] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const isEditing = Boolean(initialTask);
+  // If initialTask changes (e.g. switching between tasks), sync the form fields
+  useEffect(() => {
+    if (initialTask) {
+      setTitle(initialTask.title || '');
+      setDescription(initialTask.description || '');
+      setPriority(initialTask.priority || 'medium');
+      setDueDate(initialTask.dueDate || '');
+    } else {
+      setTitle('');
+      setDescription('');
+      setPriority('medium');
+      setDueDate('');
+    }
+    setValidationError('');
+  }, [initialTask]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      setValidationError('Please provide a task title.');
+    // Validation: Title is mandatory and cannot be only whitespace
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setValidationError('Task title is required.');
+      return;
+    }
+
+    if (trimmedTitle.length > 200) {
+      setValidationError('Task title must be under 200 characters.');
       return;
     }
 
     setSubmitting(true);
     setValidationError('');
 
-    const taskPayload = {
-      title: title.trim(),
+    const payload = {
+      title: trimmedTitle,
       description: description.trim(),
       priority,
       dueDate: dueDate || null,
@@ -39,97 +63,87 @@ export default function TaskForm({ initialTask, onSave, onCancel }) {
 
     try {
       if (onSave) {
-        // Modal mode within Dashboard
-        onSave(taskPayload);
-      } else if (window.electronAPI?.createTask) {
-        // Standalone native Electron window mode
-        await window.electronAPI.createTask(taskPayload);
-        if (window.electronAPI?.closeWindow) {
-          window.electronAPI.closeWindow();
-        }
+        onSave(payload);
       }
     } catch (err) {
       console.error('Failed to save task:', err);
-      setValidationError('Failed to save task. Please try again.');
+      setValidationError('An error occurred while saving the task.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleCancelClick = () => {
-    if (onCancel) {
-      onCancel();
-    } else if (window.electronAPI?.closeWindow) {
-      window.electronAPI.closeWindow();
-    }
-  };
-
   return (
     <div className="task-form-container">
-      <h2 className="task-form-title">{isEditing ? 'Edit Task' : 'Add New Task'}</h2>
+      <h2 className="task-form-title">{isEditing ? 'Edit Task' : 'Create New Task'}</h2>
       <p className="task-form-subtitle">
-        {isEditing ? 'Update the details for this task.' : 'Fill in the information below to add a new task.'}
+        {isEditing
+          ? 'Modify task parameters below. Creation date and completion status are preserved.'
+          : 'Define a task title, priority, and optional deadline to keep your workspace organized.'}
       </p>
 
       <form className="task-form" onSubmit={handleSubmit}>
-        {/* Title Field */}
+        {/* Title Input (Controlled) */}
         <div className="form-group">
-          <label htmlFor="task-title-input" className="form-label">
-            Task Title <span className="form-label-required">*</span>
+          <label htmlFor="form-task-title" className="form-label">
+            Title <span className="form-label-required">*</span>
           </label>
           <input
-            id="task-title-input"
+            id="form-task-title"
             type="text"
             className="form-input"
-            placeholder="e.g., Complete system architecture review"
+            placeholder="e.g., Implement local JSON persistence"
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
               if (validationError) setValidationError('');
             }}
+            maxLength={200}
             autoFocus
           />
-          {validationError && <div className="form-error">{validationError}</div>}
+          {validationError && <span className="form-error">{validationError}</span>}
         </div>
 
-        {/* Description Field */}
+        {/* Description Textarea (Controlled) */}
         <div className="form-group">
-          <label htmlFor="task-desc-input" className="form-label">
+          <label htmlFor="form-task-desc" className="form-label">
             Description
           </label>
           <textarea
-            id="task-desc-input"
+            id="form-task-desc"
             className="form-textarea"
-            placeholder="Add relevant notes, steps, or acceptance criteria..."
+            rows="3"
+            placeholder="Add relevant notes, checklist items, or details..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            maxLength={2000}
           />
         </div>
 
-        {/* Priority & Due Date Row */}
+        {/* Priority & Due Date (Controlled) */}
         <div className="form-row-2">
           <div className="form-group" style={{ flex: 1 }}>
-            <label htmlFor="task-priority-input" className="form-label">
+            <label htmlFor="form-task-priority" className="form-label">
               Priority
             </label>
             <select
-              id="task-priority-input"
+              id="form-task-priority"
               className="form-select"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
             >
-              <option value="low">🟢 Low</option>
-              <option value="medium">🟡 Medium</option>
-              <option value="high">🔴 High</option>
+              <option value="low">🟢 Low Priority</option>
+              <option value="medium">🟡 Medium Priority</option>
+              <option value="high">🔴 High Priority</option>
             </select>
           </div>
 
           <div className="form-group" style={{ flex: 1 }}>
-            <label htmlFor="task-due-date-input" className="form-label">
+            <label htmlFor="form-task-duedate" className="form-label">
               Due Date
             </label>
             <input
-              id="task-due-date-input"
+              id="form-task-duedate"
               type="date"
               className="form-input"
               value={dueDate}
@@ -138,13 +152,13 @@ export default function TaskForm({ initialTask, onSave, onCancel }) {
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Form Action Buttons */}
         <div className="form-actions">
-          <button type="button" className="btn-secondary" onClick={handleCancelClick}>
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </button>
           <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? 'Saving...' : isEditing ? 'Update Task' : 'Create Task'}
+            {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Task'}
           </button>
         </div>
       </form>
