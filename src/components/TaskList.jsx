@@ -1,19 +1,22 @@
 import React from 'react';
 import TaskCard from './TaskCard.jsx';
+import EmptyState from './EmptyState.jsx';
+import ErrorMessage from './ErrorMessage.jsx';
 import '../styles/TaskList.css';
 
 /**
- * TaskList container managing loading, error, empty, and populated task states.
+ * TaskList container that delegates empty and error states to modular subcomponents,
+ * and renders TaskCards using stable unique IDs as keys.
  *
  * @param {Object} props
- * @param {Array} props.tasks
- * @param {boolean} props.loading
- * @param {string|null} props.error
- * @param {() => void} props.onRetry
- * @param {() => void} props.onAddTask
- * @param {(id: string) => void} props.onToggleComplete
- * @param {(task: Object) => void} props.onEdit
- * @param {(id: string) => void} props.onDelete
+ * @param {Array} props.tasks - Filtered task array
+ * @param {boolean} props.loading - Loading state flag
+ * @param {string|null} props.error - Error message if any
+ * @param {() => void} props.onRetry - Error retry callback
+ * @param {() => void} props.onAddTask - Empty state CTA callback
+ * @param {(id: string) => void} props.onToggleComplete - Checkbox toggle callback
+ * @param {(task: Object) => void} props.onEdit - Edit trigger callback
+ * @param {(task: Object) => void} props.onDelete - Delete trigger callback
  */
 export default function TaskList({
   tasks,
@@ -28,47 +31,32 @@ export default function TaskList({
   // 1. Loading State
   if (loading) {
     return (
-      <div className="loading-box">
+      <div className="loading-box" role="status">
         <div className="loading-spinner"></div>
-        <div className="loading-text">Loading your desktop tasks...</div>
+        <div className="loading-text">Loading your tasks...</div>
       </div>
     );
   }
 
-  // 2. Error State
+  // 2. Error State (using modular ErrorMessage component)
   if (error) {
-    return (
-      <div className="error-banner">
-        <div className="error-message">
-          <span>⚠️</span>
-          <span>{error}</span>
-        </div>
-        {onRetry && (
-          <button type="button" className="error-retry-btn" onClick={onRetry}>
-            Retry
-          </button>
-        )}
-      </div>
-    );
+    return <ErrorMessage message={error} onRetry={onRetry} />;
   }
 
-  // 3. Empty State
+  // 3. Empty State (using modular EmptyState component)
   if (tasks.length === 0) {
     return (
-      <div className="state-box">
-        <div className="state-icon">📭</div>
-        <h3 className="state-title">No tasks found</h3>
-        <p className="state-description">
-          There are no tasks matching your current view or filter criteria. Create a new task or adjust your search.
-        </p>
-        <button type="button" className="state-action-btn" onClick={onAddTask}>
-          + Create First Task
-        </button>
-      </div>
+      <EmptyState
+        icon="📭"
+        title="No tasks found"
+        description="There are no tasks matching your current view or filter criteria. Create a new task or adjust your search."
+        actionLabel="+ Create First Task"
+        onAction={onAddTask}
+      />
     );
   }
 
-  // 4. Populated Task List
+  // 4. Populated Task List with stable keys
   return (
     <div className="task-list-container">
       {tasks.map((task) => (

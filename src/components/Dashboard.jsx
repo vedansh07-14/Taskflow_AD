@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import Sidebar from './Sidebar.jsx';
-import Header from './Header.jsx';
-import SummaryCards from './SummaryCards.jsx';
-import FilterBar from './FilterBar.jsx';
+import DashboardHeader from './DashboardHeader.jsx';
+import StatsCard from './StatsCard.jsx';
+import ProgressPanel from './ProgressPanel.jsx';
+import TaskToolbar from './TaskToolbar.jsx';
 import TaskList from './TaskList.jsx';
 import TaskForm from './TaskForm.jsx';
 import ConfirmModal from './ConfirmModal.jsx';
@@ -12,7 +13,6 @@ import '../styles/Dashboard.css';
 
 /**
  * Utility to generate stable, collision-resistant task IDs.
- * Falls back to timestamp + random string if crypto.randomUUID is unavailable.
  */
 function generateTaskId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -43,12 +43,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // ---------------------------------------------------------
-  // DERIVED STATE
-  // Instead of storing filtered tasks or metrics in separate useState,
-  // we derive them on every render using useMemo. This guarantees
-  // filters and stats can never fall out of sync with the master task list.
-  // ---------------------------------------------------------
+  // Derived state: metrics & visible tasks
   const stats = useMemo(() => calculateStats(tasks), [tasks]);
 
   const visibleTasks = useMemo(() => {
@@ -65,10 +60,6 @@ export default function Dashboard() {
   // CRUD EVENT HANDLERS
   // ---------------------------------------------------------
 
-  /**
-   * Creates a new task and prepends it to the master list.
-   * Assigns a stable UUID and timestamps.
-   */
   const handleCreateTask = (payload) => {
     const now = new Date().toISOString();
     const newTask = {
@@ -87,11 +78,6 @@ export default function Dashboard() {
     setIsCreateOpen(false);
   };
 
-  /**
-   * Non-destructive task editing.
-   * Merges user updates with the original task to ensure fields like id,
-   * createdAt, completed status, and tags are never accidentally wiped out.
-   */
   const handleSaveEditTask = (payload) => {
     if (!editingTask) return;
 
@@ -99,7 +85,7 @@ export default function Dashboard() {
       prevTasks.map((t) => {
         if (t.id === editingTask.id) {
           return {
-            ...t, // Preserves untouched fields (id, createdAt, completed, status)
+            ...t, // Non-destructive: preserves id, createdAt, completed, status
             title: payload.title,
             description: payload.description,
             priority: payload.priority,
@@ -113,9 +99,6 @@ export default function Dashboard() {
     setEditingTask(null);
   };
 
-  /**
-   * Toggles task completion state between complete and active.
-   */
   const handleToggleComplete = (id) => {
     setTasks((prevTasks) =>
       prevTasks.map((t) => {
@@ -133,16 +116,10 @@ export default function Dashboard() {
     );
   };
 
-  /**
-   * Initiates delete flow by prompting confirmation modal.
-   */
   const handleRequestDelete = (task) => {
     setDeletingTask(task);
   };
 
-  /**
-   * Permanently removes task after user confirms.
-   */
   const handleConfirmDelete = () => {
     if (!deletingTask) return;
     setTasks((prevTasks) => prevTasks.filter((t) => t.id !== deletingTask.id));
@@ -177,23 +154,45 @@ export default function Dashboard() {
       {/* 2. Main Content View */}
       <main className="dashboard-main">
         <div className="dashboard-content">
-          {/* Header */}
-          <Header
+          {/* Dashboard Header */}
+          <DashboardHeader
             title={titleMap[statusFilter]}
             subtitle={`Showing ${visibleTasks.length} of ${tasks.length} total tasks`}
             onAddTask={() => setIsCreateOpen(true)}
           />
 
-          {/* Metric Cards & Overall Completion Progress Bar */}
-          <SummaryCards
-            total={stats.total}
-            active={stats.active}
-            completed={stats.completed}
-            percentComplete={stats.percentComplete}
-          />
+          {/* Metrics Summary Cards */}
+          <div className="summary-cards-grid" style={{ marginBottom: '16px' }}>
+            <StatsCard
+              label="Total Tasks"
+              value={stats.total}
+              icon="📋"
+              variant="total"
+            />
+            <StatsCard
+              label="Active Tasks"
+              value={stats.active}
+              icon="⏳"
+              variant="active"
+            />
+            <StatsCard
+              label="Completed Tasks"
+              value={stats.completed}
+              icon="✅"
+              variant="completed"
+            />
+          </div>
 
-          {/* Search Field & Priority Dropdown */}
-          <FilterBar
+          {/* Progress Panel */}
+          <div style={{ marginBottom: '24px' }}>
+            <ProgressPanel
+              percent={stats.percentComplete}
+              title="Overall Completion"
+            />
+          </div>
+
+          {/* Task Toolbar (Search & Filters) */}
+          <TaskToolbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             priorityFilter={priorityFilter}
@@ -202,7 +201,7 @@ export default function Dashboard() {
             hasActiveFilters={hasActiveFilters}
           />
 
-          {/* Task Collection, Empty State, Loading, and Error Banners */}
+          {/* Task Collection, Empty State, Loading, and Error State */}
           <TaskList
             tasks={visibleTasks}
             loading={loading}
@@ -245,7 +244,7 @@ export default function Dashboard() {
       <ConfirmModal
         isOpen={Boolean(deletingTask)}
         title="Delete Task"
-        message="Are you sure you want to permanently delete this task? This cannot be undone."
+        message="Are you sure you want to permanently delete this task? This action cannot be undone."
         targetName={deletingTask?.title}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
