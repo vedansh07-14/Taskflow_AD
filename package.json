@@ -2,7 +2,7 @@
   "name": "taskflow-pro",
   "version": "1.0.0",
   "description": "Desktop task management application built with React, Vite, and Electron",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",

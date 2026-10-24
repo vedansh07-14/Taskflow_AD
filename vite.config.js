@@ -8,16 +8,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-  // Relative production paths: ensures file:// links in dist/index.html resolve correctly in Electron
   base: './',
   plugins: [
     react(),
     electron({
       main: {
-        entry: 'electron/main.js',
+        entry: 'electron/main.cjs',
+        vite: {
+          build: {
+            lib: {
+              entry: 'electron/main.cjs',
+              formats: ['cjs'],
+              fileName: () => 'main.cjs',
+            },
+          },
+        },
       },
       preload: {
-        input: 'electron/preload.js',
+        input: 'electron/preload.cjs',
+        vite: {
+          build: {
+            lib: {
+              entry: 'electron/preload.cjs',
+              formats: ['cjs'],
+              fileName: () => 'preload.cjs',
+            },
+          },
+        },
       },
     }),
   ],
