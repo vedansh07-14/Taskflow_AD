@@ -1,0 +1,1 @@
+var{contextBridge:e,ipcRenderer:t}=require("electron");e.exposeInMainWorld(`electronAPI`,{ping:()=>t.invoke(`app:ping`)});
