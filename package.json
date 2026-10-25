@@ -9,6 +9,7 @@
     "build": "vite build",
     "start": "electron .",
     "preview": "vite preview",
+    "test": "node --test test/*.test.cjs",
     "sign:dev": "node -e \"if (process.platform === 'darwin') { try { require('child_process').execSync('codesign --force --deep --sign - node_modules/electron/dist/Electron.app'); console.log('[sign:dev] Ad-hoc signed Electron.app for macOS notifications'); } catch(e){ console.warn('[sign:dev] Could not sign Electron.app:', e.message); } }\""
   },
   "dependencies": {
