@@ -101,10 +101,18 @@ const taskFlowAPI = {
   /**
    * Displays an OS-level native desktop notification banner.
    * @param {Object} payload - { title: string, body: string }
-   * @returns {Promise<{ shown: boolean }>}
+   * @returns {Promise<{ shown: boolean, reason?: string }>}
    */
   notify: (payload) => {
     return ipcRenderer.invoke('notification:show', payload);
+  },
+
+  /**
+   * Checks whether the current operating system supports desktop notifications.
+   * @returns {Promise<boolean>}
+   */
+  isNotificationSupported: () => {
+    return ipcRenderer.invoke('notification:is-supported');
   },
 
   /**

@@ -136,7 +136,20 @@ function showNotification(payload = {}) {
   }
 }
 
+/**
+ * Checks whether native desktop notifications are supported in the current runtime environment.
+ * @returns {boolean}
+ */
+function isNotificationSupported() {
+  return Boolean(
+    Notification &&
+    typeof Notification.isSupported === 'function' &&
+    Notification.isSupported()
+  );
+}
+
 module.exports = {
   showNotification,
+  isNotificationSupported,
   NOTIFICATION_TEMPLATES,
 };

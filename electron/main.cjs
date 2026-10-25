@@ -91,7 +91,7 @@ function createMainWindow() {
  */
 function buildApplicationMenu() {
   const template = [
-    // macOS App Name Menu
+    // 1. macOS Application Menu
     ...(isMac
       ? [
           {
@@ -105,18 +105,22 @@ function buildApplicationMenu() {
               { role: 'hideOthers' },
               { role: 'unhide' },
               { type: 'separator' },
-              { role: 'quit' },
+              {
+                label: `Quit ${app.name}`,
+                accelerator: 'Command+Q',
+                role: 'quit',
+              },
             ],
           },
         ]
       : []),
 
-    // File Menu
+    // 2. File Menu with Add Task and Quit actions
     {
       label: 'File',
       submenu: [
         {
-          label: 'New Task...',
+          label: 'Add Task...',
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             // Signal main dashboard window to open the in-dashboard modal
@@ -127,11 +131,24 @@ function buildApplicationMenu() {
           },
         },
         { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
+        {
+          label: isMac ? 'Close Window' : 'Exit',
+          accelerator: isMac ? 'Command+W' : 'Alt+F4',
+          role: isMac ? 'close' : 'quit',
+        },
+        ...(!isMac
+          ? [
+              {
+                label: `Quit ${app.name}`,
+                accelerator: 'Ctrl+Q',
+                role: 'quit',
+              },
+            ]
+          : []),
       ],
     },
 
-    // Edit Menu
+    // 3. Edit Menu
     {
       label: 'Edit',
       submenu: [
@@ -145,23 +162,39 @@ function buildApplicationMenu() {
       ],
     },
 
-    // View Menu
+    // 4. View Menu with Reload, Toggle Developer Tools, and Fullscreen
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        {
+          label: 'Reload',
+          accelerator: 'CmdOrCtrl+R',
+          role: 'reload',
+        },
+        {
+          label: 'Force Reload',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          role: 'forceReload',
+        },
+        {
+          label: 'Toggle Developer Tools',
+          accelerator: isMac ? 'Alt+Command+I' : 'Ctrl+Shift+I',
+          role: 'toggleDevTools',
+        },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
         { type: 'separator' },
-        { role: 'togglefullscreen' },
+        {
+          label: 'Toggle Fullscreen',
+          accelerator: isMac ? 'Ctrl+Command+F' : 'F11',
+          role: 'togglefullscreen',
+        },
       ],
     },
 
-    // Window Menu
+    // 5. Window Menu
     {
       label: 'Window',
       submenu: [
