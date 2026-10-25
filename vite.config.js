@@ -28,10 +28,10 @@ export default defineConfig({
         input: 'electron/preload.cjs',
         vite: {
           build: {
-            lib: {
-              entry: 'electron/preload.cjs',
-              formats: ['cjs'],
-              fileName: () => 'preload.cjs',
+            rollupOptions: {
+              output: {
+                entryFileNames: '[name].cjs',
+              },
             },
           },
         },

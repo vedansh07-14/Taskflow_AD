@@ -59,11 +59,43 @@ const taskFlowAPI = {
   },
 
   /**
-   * Triggers the creation / focusing of the dedicated Add Task window.
+   * Triggers the opening of the Add Task modal dialog.
    * @returns {Promise<{ success: boolean }>}
    */
   openAddWindow: () => {
     return ipcRenderer.invoke('window:open-add');
+  },
+
+  /**
+   * Subscribes to application menu trigger (Cmd/Ctrl+N) to open the Add Task modal.
+   * @param {Function} callback
+   * @returns {Function} Cleanup unsubscribe function
+   */
+  onOpenAddModal: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+    const subscription = () => callback();
+    ipcRenderer.on('menu:open-add-task', subscription);
+    return () => {
+      ipcRenderer.removeListener('menu:open-add-task', subscription);
+    };
+  },
+
+  /**
+   * Closes the active BrowserWindow from within renderer context.
+   * @returns {Promise<{ success: boolean }>}
+   */
+  closeWindow: () => {
+    return ipcRenderer.invoke('window:close');
+  },
+
+  /**
+   * Diagnostic connectivity test between renderer and main process.
+   * @returns {Promise<Object>}
+   */
+  ping: () => {
+    return ipcRenderer.invoke('app:ping');
   },
 
   /**

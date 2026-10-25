@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from './Sidebar.jsx';
 import DashboardHeader from './DashboardHeader.jsx';
 import StatsCard from './StatsCard.jsx';
@@ -6,28 +6,30 @@ import ProgressPanel from './ProgressPanel.jsx';
 import TaskToolbar from './TaskToolbar.jsx';
 import TaskList from './TaskList.jsx';
 import TaskForm from './TaskForm.jsx';
+import AddTaskModal from './AddTaskModal.jsx';
 import ConfirmModal from './ConfirmModal.jsx';
-import { initialMockTasks } from '../data/mockTasks.js';
+import { useTaskStore } from '../hooks/useTaskStore.js';
 import { filterTasks, calculateStats } from '../utils/filterUtils.js';
 import '../styles/Dashboard.css';
 
 /**
- * Utility to generate stable, collision-resistant task IDs.
- */
-function generateTaskId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
-
-/**
- * Top-level Dashboard controller managing master task state, derived filter state,
- * and CRUD modal workflows.
+ * Top-level Dashboard controller connected to the Electron main process
+ * and tasks.json persistence layer through the useTaskStore hook.
+ *
+ * Implements in-dashboard task creation modal and native desktop notifications.
  */
 export default function Dashboard() {
-  // 1. Master Task State (Single Source of Truth)
-  const [tasks, setTasks] = useState(initialMockTasks);
+  // 1. Data & Persistence Layer (Connected to Electron via window.taskFlow)
+  const {
+    tasks,
+    loading,
+    error,
+    createTask,
+    updateTask,
+    toggleTask,
+    deleteTask,
+    reloadTasks,
+  } = useTaskStore();
 
   // 2. Filter & Search States
   const [statusFilter, setStatusFilter] = useState('all');
@@ -39,11 +41,34 @@ export default function Dashboard() {
   const [editingTask, setEditingTask] = useState(null);
   const [deletingTask, setDeletingTask] = useState(null);
 
-  // 4. Async status flags
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // 4. In-App Toast Feedback State
+  const [toast, setToast] = useState(null);
 
-  // Derived state: metrics & visible tasks
+  const triggerToast = (title, body, icon = '✅') => {
+    setToast({ title, body, icon, id: Date.now() });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  // Listen for native Application Menu shortcut (CmdOrCtrl+N) to open in-dashboard modal
+  useEffect(() => {
+    if (window.taskFlow && typeof window.taskFlow.onOpenAddModal === 'function') {
+      const unsubscribe = window.taskFlow.onOpenAddModal(() => {
+        setIsCreateOpen(true);
+      });
+      return () => {
+        if (typeof unsubscribe === 'function') unsubscribe();
+      };
+    }
+  }, []);
+
+  // Derived state: metrics & visible filtered tasks
   const stats = useMemo(() => calculateStats(tasks), [tasks]);
 
   const visibleTasks = useMemo(() => {
@@ -57,73 +82,61 @@ export default function Dashboard() {
   const hasActiveFilters = searchQuery !== '' || (priorityFilter !== '' && priorityFilter !== 'all');
 
   // ---------------------------------------------------------
-  // CRUD EVENT HANDLERS
+  // USER ACTION HANDLERS
   // ---------------------------------------------------------
 
-  const handleCreateTask = (payload) => {
-    const now = new Date().toISOString();
-    const newTask = {
-      id: generateTaskId(),
-      title: payload.title,
-      description: payload.description || '',
-      priority: payload.priority || 'medium',
-      status: 'todo',
-      completed: false,
-      dueDate: payload.dueDate || null,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    setTasks((prevTasks) => [newTask, ...prevTasks]);
-    setIsCreateOpen(false);
+  const handleOpenAddTask = () => {
+    // Opens in-dashboard modal dialog directly
+    setIsCreateOpen(true);
   };
 
-  const handleSaveEditTask = (payload) => {
+  const handleCreateTask = async (payload) => {
+    try {
+      await createTask(payload);
+      triggerToast('Task Created', 'Your task has been created successfully.', '✨');
+      setIsCreateOpen(false);
+    } catch (err) {
+      console.error('[Dashboard] Error creating task:', err);
+      throw err;
+    }
+  };
+
+  const handleSaveEditTask = async (payload) => {
     if (!editingTask) return;
-
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => {
-        if (t.id === editingTask.id) {
-          return {
-            ...t, // Non-destructive: preserves id, createdAt, completed, status
-            title: payload.title,
-            description: payload.description,
-            priority: payload.priority,
-            dueDate: payload.dueDate,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return t;
-      })
-    );
-    setEditingTask(null);
+    try {
+      await updateTask(editingTask.id, payload);
+      setEditingTask(null);
+      triggerToast('Task Updated', 'Task changes have been saved.', '✏️');
+    } catch (err) {
+      console.error('[Dashboard] Error saving edited task:', err);
+      throw err;
+    }
   };
 
-  const handleToggleComplete = (id) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => {
-        if (t.id === id) {
-          const nextCompleted = !t.completed;
-          return {
-            ...t,
-            completed: nextCompleted,
-            status: nextCompleted ? 'completed' : 'todo',
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return t;
-      })
-    );
+  const handleToggleComplete = async (id) => {
+    try {
+      const toggled = await toggleTask(id);
+      if (toggled && toggled.completed) {
+        triggerToast('Task Completed', 'Your task has been marked as completed.', '🎉');
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error toggling task:', err);
+    }
   };
 
   const handleRequestDelete = (task) => {
     setDeletingTask(task);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingTask) return;
-    setTasks((prevTasks) => prevTasks.filter((t) => t.id !== deletingTask.id));
-    setDeletingTask(null);
+    try {
+      await deleteTask(deletingTask.id);
+      triggerToast('Task Deleted', 'The task has been permanently removed.', '🗑️');
+      setDeletingTask(null);
+    } catch (err) {
+      console.error('[Dashboard] Error deleting task:', err);
+    }
   };
 
   const handleCancelDelete = () => {
@@ -135,7 +148,6 @@ export default function Dashboard() {
     setPriorityFilter('all');
   };
 
-  // Header Title mapping
   const titleMap = {
     all: 'All Tasks',
     active: 'Active Tasks',
@@ -154,14 +166,14 @@ export default function Dashboard() {
       {/* 2. Main Content View */}
       <main className="dashboard-main">
         <div className="dashboard-content">
-          {/* Dashboard Header */}
+          {/* Header */}
           <DashboardHeader
             title={titleMap[statusFilter]}
             subtitle={`Showing ${visibleTasks.length} of ${tasks.length} total tasks`}
-            onAddTask={() => setIsCreateOpen(true)}
+            onAddTask={handleOpenAddTask}
           />
 
-          {/* Metrics Summary Cards */}
+          {/* Composed Metric Cards */}
           <div className="summary-cards-grid" style={{ marginBottom: '16px' }}>
             <StatsCard
               label="Total Tasks"
@@ -183,7 +195,7 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Progress Panel */}
+          {/* Composed Progress Panel */}
           <div style={{ marginBottom: '24px' }}>
             <ProgressPanel
               percent={stats.percentComplete}
@@ -201,13 +213,13 @@ export default function Dashboard() {
             hasActiveFilters={hasActiveFilters}
           />
 
-          {/* Task Collection, Empty State, Loading, and Error State */}
+          {/* Task List (with EmptyState & ErrorMessage) */}
           <TaskList
             tasks={visibleTasks}
             loading={loading}
             error={error}
-            onRetry={() => setError(null)}
-            onAddTask={() => setIsCreateOpen(true)}
+            onRetry={reloadTasks}
+            onAddTask={handleOpenAddTask}
             onToggleComplete={handleToggleComplete}
             onEdit={(task) => setEditingTask(task)}
             onDelete={handleRequestDelete}
@@ -215,19 +227,14 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* Create Task Modal */}
-      {isCreateOpen && (
-        <div className="modal-overlay" onClick={() => setIsCreateOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <TaskForm
-              onSave={handleCreateTask}
-              onCancel={() => setIsCreateOpen(false)}
-            />
-          </div>
-        </div>
-      )}
+      {/* 3. In-Dashboard Add Task Modal */}
+      <AddTaskModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSave={handleCreateTask}
+      />
 
-      {/* Edit Task Modal */}
+      {/* 4. Edit Task Modal */}
       {editingTask && (
         <div className="modal-overlay" onClick={() => setEditingTask(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -240,7 +247,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* 5. Delete Confirmation Dialog */}
       <ConfirmModal
         isOpen={Boolean(deletingTask)}
         title="Delete Task"
@@ -249,6 +256,29 @@ export default function Dashboard() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
+
+      {/* 6. In-App Toast Notification Banner */}
+      {toast && (
+        <aside className="toast-container" aria-live="polite">
+          <div className="toast-banner" role="status">
+            <span className="toast-banner-icon" aria-hidden="true">
+              {toast.icon}
+            </span>
+            <div className="toast-banner-content">
+              <span className="toast-banner-title">{toast.title}</span>
+              <span className="toast-banner-body">{toast.body}</span>
+            </div>
+            <button
+              type="button"
+              className="toast-banner-close"
+              onClick={() => setToast(null)}
+              aria-label="Dismiss notification"
+            >
+              ✕
+            </button>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

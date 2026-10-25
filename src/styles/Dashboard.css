@@ -81,3 +81,81 @@
     overflow-y: visible;
   }
 }
+
+/* In-App Toast Notification Banner */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-banner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--bg-secondary, #111827);
+  border: 1px solid var(--border-color, #1f2937);
+  border-left: 4px solid var(--accent-success, #10b981);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px 18px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary, #f9fafb);
+  font-size: 13.5px;
+  animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 380px;
+}
+
+.toast-banner-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.toast-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toast-banner-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary, #f9fafb);
+}
+
+.toast-banner-body {
+  font-size: 12.5px;
+  color: var(--text-secondary, #9ca3af);
+  line-height: 1.35;
+}
+
+.toast-banner-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  padding: 4px;
+  margin-left: auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.toast-banner-close:hover {
+  color: var(--text-primary, #f9fafb);
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

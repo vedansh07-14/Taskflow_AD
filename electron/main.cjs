@@ -1,10 +1,16 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const { registerIpcHandlers } = require('./ipcHandlers.cjs');
 
-// Window references
+// Configure OS-level application identification for notifications
+app.name = 'TaskFlow Pro';
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.taskflow.pro');
+}
+
+// Single primary window reference
 let mainWindow = null;
-let addTaskWindow = null;
 
 const isMac = process.platform === 'darwin';
 
@@ -62,14 +68,14 @@ function createMainWindow() {
   // Environment-aware URL / file resolution
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
-    console.log(`[Main Process] Loading Dashboard from Vite dev server: ${devServerUrl}#/dashboard`);
-    mainWindow.loadURL(`${devServerUrl}#/dashboard`).catch((err) => {
+    console.log(`[Main Process] Loading Dashboard from Vite dev server: ${devServerUrl}`);
+    mainWindow.loadURL(devServerUrl).catch((err) => {
       console.error('[Main Process] Failed to load Vite dev server:', err);
     });
   } else {
     const prodPath = path.join(__dirname, '../dist/index.html');
     console.log(`[Main Process] Loading Dashboard from production bundle: ${prodPath}`);
-    mainWindow.loadFile(prodPath, { hash: 'dashboard' }).catch((err) => {
+    mainWindow.loadFile(prodPath).catch((err) => {
       console.error('[Main Process] Failed to load production index.html:', err);
     });
   }
@@ -77,65 +83,6 @@ function createMainWindow() {
   // Handle window close & cleanup
   mainWindow.on('closed', () => {
     mainWindow = null;
-    // If the main window closes, close any detached child windows
-    if (addTaskWindow && !addTaskWindow.isDestroyed()) {
-      addTaskWindow.close();
-    }
-  });
-}
-
-/**
- * Creates the dedicated Add Task window.
- * Enforces a single instance (focuses existing if already open).
- */
-function createAddTaskWindow() {
-  // Prevent duplicate windows: if already open, bring to front and focus
-  if (addTaskWindow && !addTaskWindow.isDestroyed()) {
-    console.log('[Main Process] Add Task window already open — focusing existing window.');
-    if (addTaskWindow.isMinimized()) addTaskWindow.restore();
-    addTaskWindow.focus();
-    return;
-  }
-
-  const preloadPath = resolvePreloadPath();
-  console.log(`[Main Process] Creating Add Task window with preload: ${preloadPath}`);
-
-  addTaskWindow = new BrowserWindow({
-    width: 520,
-    height: 640,
-    minWidth: 460,
-    minHeight: 560,
-    title: 'Add New Task - TaskFlow Pro',
-    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : null,
-    modal: false,               // Floating auxiliary window, not modal blocking
-    backgroundColor: '#0b0f19',
-    show: false,
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  addTaskWindow.once('ready-to-show', () => {
-    addTaskWindow.show();
-  });
-
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devServerUrl) {
-    addTaskWindow.loadURL(`${devServerUrl}#/add-task`).catch((err) => {
-      console.error('[Main Process] Failed to load Add Task dev URL:', err);
-    });
-  } else {
-    const prodPath = path.join(__dirname, '../dist/index.html');
-    addTaskWindow.loadFile(prodPath, { hash: 'add-task' }).catch((err) => {
-      console.error('[Main Process] Failed to load Add Task prod file:', err);
-    });
-  }
-
-  addTaskWindow.on('closed', () => {
-    addTaskWindow = null;
   });
 }
 
@@ -172,7 +119,11 @@ function buildApplicationMenu() {
           label: 'New Task...',
           accelerator: 'CmdOrCtrl+N',
           click: () => {
-            createAddTaskWindow();
+            // Signal main dashboard window to open the in-dashboard modal
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu:open-add-task');
+              mainWindow.focus();
+            }
           },
         },
         { type: 'separator' },
@@ -228,78 +179,15 @@ function buildApplicationMenu() {
 }
 
 // -------------------------------------------------------------
-// IPC CHANNELS (Preload API Matching Contract)
+// REGISTER MODULAR IPC HANDLERS
 // -------------------------------------------------------------
-
-// Window management: Open Add Task window
-ipcMain.handle('window:open-add', () => {
-  createAddTaskWindow();
-  return { success: true };
-});
-
-// Legacy channel alias for backwards compatibility
-ipcMain.handle('window:open-add-task', () => {
-  createAddTaskWindow();
-  return { success: true };
-});
-
-// Window management: Close sender window
-ipcMain.handle('window:close', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  if (win && !win.isDestroyed()) {
-    win.close();
-  }
-  return { success: true };
-});
-
-// Diagnostics ping
-ipcMain.handle('app:ping', async () => {
-  return {
-    status: 'connected',
-    message: 'IPC channel between React renderer and Electron main process is active.',
-    electronVersion: process.versions.electron,
-    nodeVersion: process.versions.node,
-    chromeVersion: process.versions.chrome,
-    platform: process.platform,
-  };
-});
-
-// Temporary placeholder handlers matching window.taskFlow API contract
-// Full JSON file persistence will be connected in Phase 8
-ipcMain.handle('tasks:list', async () => {
-  return [];
-});
-
-ipcMain.handle('tasks:add', async (_event, taskData) => {
-  console.log('[Main Process] Received task payload for creation:', taskData);
-  return {
-    id: `temp-${Date.now()}`,
-    ...taskData,
-    status: 'todo',
-    completed: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-});
-
-ipcMain.handle('tasks:update', async (_event, { id, updates }) => {
-  console.log(`[Main Process] Received task update for ${id}:`, updates);
-  return { id, ...updates, updatedAt: new Date().toISOString() };
-});
-
-ipcMain.handle('tasks:toggle', async (_event, { id }) => {
-  console.log(`[Main Process] Received task toggle for ${id}`);
-  return { id, toggled: true, updatedAt: new Date().toISOString() };
-});
-
-ipcMain.handle('tasks:delete', async (_event, { id }) => {
-  console.log(`[Main Process] Received task delete for ${id}`);
-  return { success: true, id };
-});
-
-ipcMain.handle('notification:show', async (_event, { title, body }) => {
-  console.log(`[Main Process] Native Notification: ${title} - ${body}`);
-  return { shown: true };
+registerIpcHandlers({
+  onOpenAddModal: () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('menu:open-add-task');
+      mainWindow.focus();
+    }
+  },
 });
 
 // -------------------------------------------------------------

@@ -1,0 +1,117 @@
+/* Modern Dark AddTaskModal Styling */
+.add-task-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-content: center;
+  z-index: 200;
+  padding: 20px;
+  animation: modalFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.add-task-modal-box {
+  background-color: var(--bg-secondary, #111827);
+  border: 1px solid var(--border-color, #1f2937);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  width: 100vw;
+  max-width: 520px;
+  color: var(--text-primary, #f9fafb);
+  overflow: hidden;
+  animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.add-task-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-color, #1f2937);
+}
+
+.add-task-modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-task-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #f9fafb);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.add-task-modal-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary, #9ca3af);
+  margin: 0;
+}
+
+.add-task-modal-close-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary, #9ca3af);
+  font-size: 16px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+}
+
+.add-task-modal-close-btn:hover:not(:disabled) {
+  background-color: var(--bg-hover, #1f2937);
+  color: var(--text-primary, #f9fafb);
+  border-color: var(--border-color, #374151);
+}
+
+.add-task-modal-close-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.add-task-modal-body {
+  padding: 20px 24px 24px;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 560px) {
+  .add-task-modal-box {
+    max-width: 95vw;
+  }
+
+  .add-task-modal-header,
+  .add-task-modal-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
