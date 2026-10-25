@@ -14,7 +14,7 @@ export function useTaskStore() {
   const isElectronAvailable = Boolean(window.taskFlow && typeof window.taskFlow.listTasks === 'function');
 
   /**
-   * Fetches all tasks from tasks.json via IPC.
+   * Fetches all tasks from tasks.json via IPC with defensive error handling.
    */
   const loadTasks = useCallback(async () => {
     if (!isElectronAvailable) {
@@ -34,22 +34,48 @@ export function useTaskStore() {
     }
   }, [isElectronAvailable]);
 
-  // Initial fetch and real-time subscription
+  // Initial fetch and real-time subscription with unmount protection
   useEffect(() => {
-    loadTasks();
+    let isMounted = true;
 
-    if (isElectronAvailable && typeof window.taskFlow.onTasksChanged === 'function') {
-      const unsubscribe = window.taskFlow.onTasksChanged(() => {
-        loadTasks();
-      });
+    const safeLoad = async () => {
+      if (!isElectronAvailable) {
+        if (isMounted) setLoading(false);
+        return;
+      }
 
-      return () => {
-        if (typeof unsubscribe === 'function') {
-          unsubscribe();
+      try {
+        if (isMounted) setError(null);
+        const data = await window.taskFlow.listTasks();
+        if (isMounted) {
+          setTasks(Array.isArray(data) ? data : []);
         }
-      };
+      } catch (err) {
+        if (isMounted) {
+          console.error('[useTaskStore] Failed to load tasks from main process:', err);
+          setError(`Failed to read tasks from disk: ${err.message}`);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    safeLoad();
+
+    let unsubscribe = null;
+    if (isElectronAvailable && typeof window.taskFlow.onTasksChanged === 'function') {
+      unsubscribe = window.taskFlow.onTasksChanged(() => {
+        if (isMounted) safeLoad();
+      });
     }
-  }, [loadTasks, isElectronAvailable]);
+
+    return () => {
+      isMounted = false;
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [isElectronAvailable]);
 
   /**
    * Creates a new task and triggers a native desktop notification upon success.

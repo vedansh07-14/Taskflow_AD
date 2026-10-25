@@ -216,10 +216,13 @@ export default function Dashboard() {
           {/* Task List (with EmptyState & ErrorMessage) */}
           <TaskList
             tasks={visibleTasks}
+            totalTasksCount={tasks.length}
+            hasActiveFilters={hasActiveFilters}
             loading={loading}
             error={error}
             onRetry={reloadTasks}
             onAddTask={handleOpenAddTask}
+            onResetFilters={handleResetFilters}
             onToggleComplete={handleToggleComplete}
             onEdit={(task) => setEditingTask(task)}
             onDelete={handleRequestDelete}

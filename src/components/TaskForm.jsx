@@ -61,6 +61,30 @@ export default function TaskForm({
       return;
     }
 
+    // Due Date validation
+    if (dueDate) {
+      const trimmedDate = dueDate.trim();
+      const DATE_REGEX = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+      if (!DATE_REGEX.test(trimmedDate)) {
+        setValidationError('Invalid date format for due date. Expected YYYY-MM-DD.');
+        return;
+      }
+      const [year, month, day] = trimmedDate.split('-').map(Number);
+      const testDate = new Date(Date.UTC(year, month - 1, day));
+      if (
+        testDate.getUTCFullYear() !== year ||
+        testDate.getUTCMonth() !== month - 1 ||
+        testDate.getUTCDate() !== day
+      ) {
+        setValidationError('Invalid calendar date for due date.');
+        return;
+      }
+      if (year < 1970 || year > 2100) {
+        setValidationError('Due date year must be between 1970 and 2100.');
+        return;
+      }
+    }
+
     setLocalSubmitting(true);
     setValidationError('');
 
@@ -68,7 +92,7 @@ export default function TaskForm({
       title: trimmedTitle,
       description: description.trim(),
       priority,
-      dueDate: dueDate || null,
+      dueDate: dueDate ? dueDate.trim() : null,
     };
 
     try {

@@ -9,6 +9,13 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.taskflow.pro');
 }
 
+// Enforce single instance lock to prevent duplicate window & process creation
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  console.log('[Main Process] Another instance is already running. Quitting duplicate instance.');
+  app.quit();
+}
+
 // Single primary window reference
 let mainWindow = null;
 
@@ -63,6 +70,26 @@ function createMainWindow() {
   // Reveal window smoothly once content has finished initial render
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // Security: Prevent unexpected window navigation (e.g. user drags link or script redirects)
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+    if (devServerUrl) {
+      if (!navigationUrl.startsWith(devServerUrl)) {
+        console.warn('[Security] Blocked unauthorized window navigation to:', navigationUrl);
+        event.preventDefault();
+      }
+    } else if (!navigationUrl.startsWith('file://')) {
+      console.warn('[Security] Blocked unauthorized window navigation to:', navigationUrl);
+      event.preventDefault();
+    }
+  });
+
+  // Security: Prevent opening unmanaged child windows (window.open, <a target="_blank">)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.warn('[Security] Denied attempt to open external window for URL:', url);
+    return { action: 'deny' };
   });
 
   // Environment-aware URL / file resolution
@@ -227,25 +254,35 @@ registerIpcHandlers({
 // APPLICATION LIFECYCLE MANAGEMENT
 // -------------------------------------------------------------
 
-app.whenReady()
-  .then(() => {
-    buildApplicationMenu();
-    createMainWindow();
-
-    // macOS re-activation from dock
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow();
-      }
-    });
-  })
-  .catch((err) => {
-    console.error('[Main Process] Fatal startup error:', err);
+if (gotTheLock) {
+  // Focus existing window when user attempts to launch a second instance
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
 
-// Quit when all windows are closed, except on macOS
-app.on('window-all-closed', () => {
-  if (!isMac) {
-    app.quit();
-  }
-});
+  app.whenReady()
+    .then(() => {
+      buildApplicationMenu();
+      createMainWindow();
+
+      // macOS re-activation from dock
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createMainWindow();
+        }
+      });
+    })
+    .catch((err) => {
+      console.error('[Main Process] Fatal startup error:', err);
+    });
+
+  // Quit when all windows are closed, except on macOS
+  app.on('window-all-closed', () => {
+    if (!isMac) {
+      app.quit();
+    }
+  });
+}
