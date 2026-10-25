@@ -25,8 +25,13 @@ const isMac = process.platform === 'darwin';
  * Resolves the preload script path reliably across development and production.
  */
 function resolvePreloadPath() {
+  const packagedPreload = path.join(__dirname, 'preload.cjs');
+  if (app.isPackaged && fs.existsSync(packagedPreload)) {
+    return packagedPreload;
+  }
+
   const candidates = [
-    path.join(__dirname, 'preload.cjs'),
+    packagedPreload,
     path.join(__dirname, 'preload.js'),
     path.join(__dirname, 'preload.mjs'),
     path.join(__dirname, '../dist-electron/preload.cjs'),
@@ -41,7 +46,7 @@ function resolvePreloadPath() {
     }
   }
 
-  return path.join(__dirname, 'preload.cjs');
+  return packagedPreload;
 }
 
 /**
@@ -51,12 +56,19 @@ function createMainWindow() {
   const preloadPath = resolvePreloadPath();
   console.log(`[Main Process] Creating Dashboard window with preload: ${preloadPath}`);
 
+  const iconCandidates = [
+    path.join(__dirname, '../build/icon.png'),
+    path.join(__dirname, 'build/icon.png'),
+  ];
+  const appIcon = iconCandidates.find((p) => fs.existsSync(p));
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: 'TaskFlow Pro',
+    ...(appIcon ? { icon: appIcon } : {}),
     backgroundColor: '#0b0f19', // Matches dark design theme; eliminates white flash
     show: false,                // Graceful visual display: hidden until DOM paints
     webPreferences: {
@@ -72,11 +84,13 @@ function createMainWindow() {
     mainWindow.show();
   });
 
+  // Environment-aware check: never attempt dev server loading when packaged
+  const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
+
   // Security: Prevent unexpected window navigation (e.g. user drags link or script redirects)
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
-    const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-    if (devServerUrl) {
-      if (!navigationUrl.startsWith(devServerUrl)) {
+    if (isDev) {
+      if (!navigationUrl.startsWith(process.env.VITE_DEV_SERVER_URL)) {
         console.warn('[Security] Blocked unauthorized window navigation to:', navigationUrl);
         event.preventDefault();
       }
@@ -92,11 +106,9 @@ function createMainWindow() {
     return { action: 'deny' };
   });
 
-  // Environment-aware URL / file resolution
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devServerUrl) {
-    console.log(`[Main Process] Loading Dashboard from Vite dev server: ${devServerUrl}`);
-    mainWindow.loadURL(devServerUrl).catch((err) => {
+  if (isDev) {
+    console.log(`[Main Process] Loading Dashboard from Vite dev server: ${process.env.VITE_DEV_SERVER_URL}`);
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL).catch((err) => {
       console.error('[Main Process] Failed to load Vite dev server:', err);
     });
   } else {

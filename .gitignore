@@ -3,6 +3,7 @@ dist/
 dist-electron/
 out/
 release/
+.taskflow_data/
 .env
 .env.*
 !.env.example
